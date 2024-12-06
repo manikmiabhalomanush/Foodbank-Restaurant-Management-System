@@ -1,0 +1,11 @@
+ApBurger 100.00 26
+nana 120.00 70
+Apples 200.00 70
+Burger 100.00 8
+.00 30.00 8
+BURGER 100.00 29
+Burger 100.00 29
+k 100.00 29
+Burger 100.00 10
+Sharma 90.00 7
+0 90.00 7
