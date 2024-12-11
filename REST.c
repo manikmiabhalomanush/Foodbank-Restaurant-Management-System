@@ -101,7 +101,6 @@ void registerUserOrAdmin(int isAdmin) {
     char filename[20];
     strcpy(filename, isAdmin ? "admins.txt" : "users.txt");
 
-
     file = fopen(filename, "a+");
     if (file == NULL) {
         printf("Error: Could not open %s.\n", filename);
@@ -126,13 +125,10 @@ void registerUserOrAdmin(int isAdmin) {
         }
     }
 
-
     fseek(file, 0, SEEK_END);
-
     fprintf(file, "%s %s\n", user.username, user.password);
     printf("%s registered successfully!\n", isAdmin ? "Admin" : "User");
     WAIT();
-
     fclose(file);
 }
 
@@ -148,7 +144,6 @@ int login(int *isAdmin) {
     scanf("%s", password);
     getchar();
 
-
     file = fopen("users.txt", "r");
     if (file != NULL) {
         while (fscanf(file, "%s %s", fileUsername, filePassword) != EOF) {
@@ -162,7 +157,6 @@ int login(int *isAdmin) {
         }
         fclose(file);
     }
-
 
     file = fopen("admins.txt", "r");
     if (file != NULL) {
@@ -254,15 +248,8 @@ void adminModule() {
 void viewMenu() {
     FILE *file = fopen("menu.txt", "r+");
     if (file == NULL) {
-        file = fopen("menu.txt", "w");
-        if (file == NULL) {
-            printf("Error: Could not create menu file.\n");
-            WAIT();
-            return;
-        }
         printf("Menu is empty. Please ask the admin to create a menu.\n");
         WAIT();
-        fclose(file);
         return;
     }
 
@@ -345,79 +332,108 @@ void placeOrder(char *username) {
         }
     }
 
-    if (orderPlaced) {
-        printf("Do you have a coupon code? (y/n): ");
-        char useCoupon;
-        scanf(" %c", &useCoupon);
-
-        if (useCoupon == 'y' || useCoupon == 'Y') {
-            printf("Enter your coupon code: ");
-            scanf("%s", couponCode);
-            discount = applyCoupon(couponCode);
-            if (discount > 0) {
-                printf("Coupon applied! You get a %.2f%% discount.\n", discount);
-                totalPrice = totalPrice - (totalPrice * discount / 100);
-            } else {
-                printf("Invalid or expired coupon code.\n");
-            }
-        }
-
-        printf("\n=======================================\n");
-        printf("           ORDER RECEIPT               \n");
-        printf("=======================================\n");
-        printf("Customer: %s\n", username);
-        printf("Item: %-20s | Quantity: %-3d | Total Price: $%-6.2f\n", itemName, quantity, totalPrice);
-        printf("\nThank you for ordering, Mr. %s!\n", username);
-        printf("=======================================\n");
-    } else {
-        printf("Item not found in the menu.\n");
+    if (!orderPlaced) {
+        printf("Error: Item not found.\n");
+        WAIT();
+        fclose(menuFile);
+        return;
     }
 
     fclose(menuFile);
-    WAIT();
+
+    printf("Enter coupon code (or press Enter to skip): ");
+    getchar();
+    fgets(couponCode, 20, stdin);
+    couponCode[strcspn(couponCode, "\n")] = 0;
+
+    if (strlen(couponCode) > 0) {
+        discount = applyCoupon(couponCode);
+        totalPrice -= totalPrice * (discount / 100);
+    }
+
+    FILE *orderFile = fopen("orders.txt", "a+");
+    if (orderFile == NULL) {
+        printf("Error saving order.\n");
+        WAIT();
+        return;
+    }
+
+    fprintf(orderFile, "%s %s %d %.2f\n", username, itemName, quantity, totalPrice);
+    fclose(orderFile);
+
+    // Displaying the bill
+    CLEAR_SCREEN();
+    printf("=======================================\n");
+    printf("              BILL                     \n");
+    printf("=======================================\n");
+    printf("User: %-20s\n", username);
+    printf("Item: %-20s\n", itemName);
+    printf("Quantity: %-3d\n", quantity);
+    printf("Subtotal: $%.2f\n", item.price * quantity);
+    if (discount > 0) {
+        printf("Discount Applied: %.2f%%\n", discount);
+        printf("Discount Amount: $%.2f\n", item.price * quantity * (discount / 100));
+    }
+    printf("Total Price: $%.2f\n", totalPrice);
+    printf("=======================================\n");
+
+    // Wait for user to press Enter before returning to the menu
+    printf("Press Enter to return to the menu...");
+    getchar();
+    getchar();
 }
 
 void viewOrderHistory() {
-    FILE *orderFile = fopen("orders.txt", "r");
-    if (orderFile == NULL) {
-        printf("No orders placed yet.\n");
+    FILE *file = fopen("orders.txt", "r");
+    if (file == NULL) {
+        printf("No orders have been placed yet.\n");
         WAIT();
         return;
     }
 
     Order order;
-    printf("Order History:\n");
-    while (fscanf(orderFile, "%s %s %d %f", order.username, order.itemName, &order.quantity, &order.totalPrice) != EOF) {
-        printf("User: %-20s | Item: %-20s | Quantity: %-3d | Total Price: $%-6.2f\n", order.username, order.itemName, order.quantity, order.totalPrice);
+    CLEAR_SCREEN();
+    printf("=======================================\n");
+    printf("          ORDER HISTORY                \n");
+    printf("=======================================\n");
+    while (fscanf(file, "%s %s %d %f", order.username, order.itemName, &order.quantity, &order.totalPrice) != EOF) {
+        printf("User: %-20s | Item: %-15s | Quantity: %-3d | Total Price: $%-6.2f\n",
+               order.username, order.itemName, order.quantity, order.totalPrice);
     }
+    printf("=======================================\n");
 
-    fclose(orderFile);
-    WAIT();
+    fclose(file);
+    printf("Press Enter to return...");
+    getchar();
+    getchar();
 }
 
 void checkTotalSales() {
-    FILE *orderFile = fopen("orders.txt", "r");
-    if (orderFile == NULL) {
-        printf("No orders placed yet.\n");
+    FILE *file = fopen("orders.txt", "r");
+    if (file == NULL) {
+        printf("No orders have been placed yet.\n");
         WAIT();
         return;
     }
 
-    float totalSales = 0;
     Order order;
-    while (fscanf(orderFile, "%s %s %d %f", order.username, order.itemName, &order.quantity, &order.totalPrice) != EOF) {
+    float totalSales = 0.0;
+    while (fscanf(file, "%s %s %d %f", order.username, order.itemName, &order.quantity, &order.totalPrice) != EOF) {
         totalSales += order.totalPrice;
     }
 
+    fclose(file);
     printf("Total Sales: $%.2f\n", totalSales);
-    fclose(orderFile);
-    WAIT();
+    printf("Press Enter to return...");
+    getchar();
+    getchar();
 }
 
 void createCoupon() {
-    FILE *couponFile = fopen("coupons.txt", "a+");
-    if (couponFile == NULL) {
-        printf("Error opening coupon file.\n");
+    CLEAR_SCREEN();
+    FILE *file = fopen("coupons.txt", "a+");
+    if (file == NULL) {
+        printf("Error opening file.\n");
         WAIT();
         return;
     }
@@ -425,36 +441,34 @@ void createCoupon() {
     Coupon coupon;
     printf("Enter coupon code: ");
     scanf("%s", coupon.code);
-    printf("Enter discount percentage (1-100): ");
+    printf("Enter discount percentage: ");
     scanf("%f", &coupon.discountPercentage);
 
-    if (coupon.discountPercentage < 1 || coupon.discountPercentage > 100) {
-        printf("Error: Discount percentage must be between 1 and 100.\n");
-        WAIT();
-        fclose(couponFile);
-        return;
-    }
-
-    fprintf(couponFile, "%s %.2f\n", coupon.code, coupon.discountPercentage);
-    fclose(couponFile);
+    fprintf(file, "%s %.2f\n", coupon.code, coupon.discountPercentage);
+    fclose(file);
     printf("Coupon created successfully.\n");
     WAIT();
 }
 
 float applyCoupon(char *couponCode) {
-    FILE *couponFile = fopen("coupons.txt", "r");
-    if (couponFile == NULL) {
-        return 0;
+    FILE *file = fopen("coupons.txt", "r");
+    if (file == NULL) {
+        printf("No coupons available.\n");
+        return 0.0;
     }
 
     Coupon coupon;
-    while (fscanf(couponFile, "%s %f", coupon.code, &coupon.discountPercentage) != EOF) {
+    while (fscanf(file, "%s %f", coupon.code, &coupon.discountPercentage) != EOF) {
         if (strcmp(coupon.code, couponCode) == 0) {
-            fclose(couponFile);
+            fclose(file);
+            printf("Coupon applied! Discount: %.2f%%\n", coupon.discountPercentage);
+            WAIT();
             return coupon.discountPercentage;
         }
     }
 
-    fclose(couponFile);
-    return 0;
+    fclose(file);
+    printf("Invalid coupon code.\n");
+    WAIT();
+    return 0.0;
 }
